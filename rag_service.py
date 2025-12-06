@@ -7,6 +7,7 @@ Combines vector search results with LLM capabilities to produce grounded respons
 
 import aiohttp
 from typing import List, Dict, Any
+import google.generativeai as genai
 
 
 class RAGService:
@@ -33,8 +34,9 @@ class RAGService:
         self,
         embeddings_service,
         vector_store,
-        llm_model: str = "anthropic/claude-3-5-sonnet",
-        api_key: str = None
+        llm_model: str = "gemini-1.5-flash",
+        api_key: str = None,
+        provider: str = "google"
     ):
         """
         Initialize the RAG service.
@@ -43,25 +45,29 @@ class RAGService:
             embeddings_service: Service for generating embeddings
             vector_store: Vector database for similarity search
             llm_model: LLM model for answer generation
-            api_key: OpenRouter API key
+            api_key: API key (Google or OpenRouter)
+            provider: "google" or "openrouter"
             
         LLM Model Selection:
-        - Claude 3.5 Sonnet: Excellent reasoning, context handling (default)
+        Google:
+        - gemini-1.5-flash: Fast and efficient (default)
+        - gemini-1.5-pro: More capable, slower
+        
+        OpenRouter:
+        - Claude 3.5 Sonnet: Excellent reasoning, context handling
         - GPT-4: Strong performance, good for complex queries
         - GPT-3.5 Turbo: Fast and cost-effective for simple queries
-        - Mistral Large: Open-source alternative
-        
-        We default to Claude 3.5 Sonnet because:
-        - Superior context understanding
-        - Better at following instructions
-        - Strong at synthesis from multiple sources
-        - Good balance of quality and cost
         """
         self.embeddings_service = embeddings_service
         self.vector_store = vector_store
         self.llm_model = llm_model
         self.api_key = api_key
+        self.provider = provider.lower()
         self.base_url = "https://openrouter.ai/api/v1"
+        
+        # Initialize Google Gemini if using Google provider
+        if self.provider == "google":
+            genai.configure(api_key=self.api_key)
     
     
     async def generate_answer(
@@ -207,7 +213,7 @@ ANSWER:"""
         Call the LLM API to generate an answer.
         
         This method:
-        1. Formats the request for OpenRouter
+        1. Formats the request for Google Gemini or OpenRouter
         2. Sends the prompt to the LLM
         3. Extracts and returns the generated text
         
@@ -231,35 +237,71 @@ ANSWER:"""
         Raises:
             Exception: If API call fails
         """
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        
-        payload = {
-            "model": self.llm_model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ],
-            "max_tokens": 1000,
-            "temperature": 0.3,
-        }
-        
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=headers,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=60)
-                ) as response:
-                    
-                    if response.status != 200:
-                        error_text = await response.text()
-                        raise Exception(f"LLM API error: {response.status} - {error_text}")
+            if self.provider == "google":
+                # Use Google Gemini API
+                # The Google SDK expects model names like "gemini-1.5-flash" (without prefixes)
+                # Remove any provider prefix (e.g., "google/gemini-1.5-flash" -> "gemini-1.5-flash")
+                model_name = self.llm_model.replace("google/", "").replace("models/", "")
+                
+                # Ensure we have a valid gemini model name
+                if not model_name.startswith("gemini"):
+                    model_name = "gemini-1.5-flash"  # Default to stable model
+                
+                try:
+                    model = genai.GenerativeModel(model_name)
+                    response = model.generate_content(
+                        prompt,
+                        generation_config=genai.GenerationConfig(
+                            max_output_tokens=1000,
+                            temperature=0.3,
+                        )
+                    )
+                    return response.text
+                except Exception as e:
+                    # If model not found, try with "gemini-pro" as fallback
+                    if "not found" in str(e).lower() and model_name != "gemini-pro":
+                        print(f"Model {model_name} not available, trying gemini-pro...")
+                        model = genai.GenerativeModel("gemini-pro")
+                        response = model.generate_content(
+                            prompt,
+                            generation_config=genai.GenerationConfig(
+                                max_output_tokens=1000,
+                                temperature=0.3,
+                            )
+                        )
+                        return response.text
+                    raise
+            else:
+                # Use OpenRouter API
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                }
+                
+                payload = {
+                    "model": self.llm_model,
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": prompt
+                        }
+                    ],
+                    "max_tokens": 1000,
+                    "temperature": 0.3,
+                }
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        f"{self.base_url}/chat/completions",
+                        headers=headers,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=60)
+                    ) as response:
+                        
+                        if response.status != 200:
+                            error_text = await response.text()
+                            raise Exception(f"LLM API error: {response.status} - {error_text}")
                     
                     data = await response.json()
                     

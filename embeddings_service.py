@@ -1,7 +1,7 @@
 """
 Embeddings Service Module
 
-Generates vector embeddings using OpenRouter API.
+Generates vector embeddings using Google Gemini or OpenRouter API.
 Handles API communication, rate limiting, and error handling for embedding generation.
 """
 
@@ -9,11 +9,12 @@ import aiohttp
 import asyncio
 from typing import List, Optional
 import numpy as np
+import google.generativeai as genai
 
 
 class EmbeddingsService:
     """
-    Service for generating text embeddings via OpenRouter API.
+    Service for generating text embeddings via Google Gemini or OpenRouter API.
     
     Embeddings are dense vector representations of text that capture semantic meaning.
     They enable similarity search by placing semantically similar texts close together
@@ -29,27 +30,31 @@ class EmbeddingsService:
         "cat" and "car" have different embeddings (despite similar spelling)
     """
     
-    def __init__(self, api_key: str, model: str = "openai/text-embedding-3-small"):
+    def __init__(self, api_key: str, model: str = "text-embedding-004", provider: str = "google"):
         """
         Initialize the embeddings service.
         
         Args:
-            api_key: OpenRouter API key for authentication
-            model: Embedding model to use (default: text-embedding-3-small)
+            api_key: API key for authentication (Google or OpenRouter)
+            model: Embedding model to use
+            provider: "google" or "openrouter"
             
         Model choices explained:
-        - text-embedding-3-small: 1536 dimensions, cost-effective, good performance
-        - text-embedding-3-large: 3072 dimensions, higher quality, more expensive
-        - text-embedding-ada-002: 1536 dimensions, legacy but reliable
+        Google:
+        - text-embedding-004: 768 dimensions, optimized for RAG
         
-        We default to text-embedding-3-small because:
-        - Balance of quality and cost
-        - Fast inference
-        - Sufficient for most RAG use cases
+        OpenRouter:
+        - openai/text-embedding-3-small: 1536 dimensions, cost-effective
+        - openai/text-embedding-3-large: 3072 dimensions, higher quality
         """
         self.api_key = api_key
         self.model = model
+        self.provider = provider.lower()
         self.base_url = "https://openrouter.ai/api/v1"
+        
+        # Initialize Google Gemini if using Google provider
+        if self.provider == "google":
+            genai.configure(api_key=self.api_key)
         
         # Track API statistics for monitoring
         self.total_tokens_processed = 0
@@ -86,41 +91,56 @@ class EmbeddingsService:
         if not text.strip():
             raise ValueError("Cannot generate embedding for empty text")
         
-        # Prepare API request
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        
-        payload = {
-            "model": self.model,
-            "input": text,
-        }
-        
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.base_url}/embeddings",
-                    headers=headers,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=30)
-                ) as response:
-                    
-                    if response.status != 200:
-                        error_text = await response.text()
-                        raise Exception(f"API error: {response.status} - {error_text}")
-                    
-                    data = await response.json()
-                    
-                    # Extract embedding from response
-                    # OpenRouter returns: {"data": [{"embedding": [...]}]}
-                    embedding = data["data"][0]["embedding"]
-                    
-                    # Update statistics
-                    self.total_requests += 1
-                    self.total_tokens_processed += data.get("usage", {}).get("total_tokens", 0)
-                    
-                    return embedding
+            if self.provider == "google":
+                # Use Google Gemini API
+                result = genai.embed_content(
+                    model=f"models/{self.model}",
+                    content=text,
+                    task_type="retrieval_document"
+                )
+                embedding = result['embedding']
+                
+                # Update statistics
+                self.total_requests += 1
+                # Google doesn't return token count, estimate it
+                self.total_tokens_processed += len(text.split())
+                
+                return embedding
+            else:
+                # Use OpenRouter API
+                headers = {
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                }
+                
+                payload = {
+                    "model": self.model,
+                    "input": text,
+                }
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(
+                        f"{self.base_url}/embeddings",
+                        headers=headers,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=30)
+                    ) as response:
+                        
+                        if response.status != 200:
+                            error_text = await response.text()
+                            raise Exception(f"API error: {response.status} - {error_text}")
+                        
+                        data = await response.json()
+                        
+                        # Extract embedding from response
+                        embedding = data["data"][0]["embedding"]
+                        
+                        # Update statistics
+                        self.total_requests += 1
+                        self.total_tokens_processed += data.get("usage", {}).get("total_tokens", 0)
+                        
+                        return embedding
                     
         except asyncio.TimeoutError:
             raise Exception("Embedding generation timed out")

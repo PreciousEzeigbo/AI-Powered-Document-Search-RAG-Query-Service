@@ -123,10 +123,12 @@ async def startup_event():
     )
     
     # Initialize embeddings service
-    # Uses OpenRouter API for generating vector embeddings
+    # Uses Google Gemini or OpenRouter API for generating vector embeddings
+    api_key = settings.google_api_key if settings.provider == "google" else settings.openrouter_api_key
     embeddings_service = EmbeddingsService(
-        api_key=settings.openrouter_api_key,
-        model=settings.embedding_model
+        api_key=api_key,
+        model=settings.embedding_model,
+        provider=settings.provider
     )
     
     # Initialize vector store
@@ -141,11 +143,13 @@ async def startup_event():
     
     # Initialize RAG service
     # Orchestrates retrieval and generation
+    api_key = settings.google_api_key if settings.provider == "google" else settings.openrouter_api_key
     rag_service = RAGService(
         embeddings_service=embeddings_service,
         vector_store=vector_store,
         llm_model=settings.llm_model,
-        api_key=settings.openrouter_api_key
+        api_key=api_key,
+        provider=settings.provider
     )
     
     print("✅ All services initialized successfully")
