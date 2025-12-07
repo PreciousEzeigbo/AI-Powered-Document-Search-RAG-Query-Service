@@ -41,11 +41,11 @@ database: Database = None
 class QueryRequest(BaseModel):
     """Request model for RAG query endpoint"""
     question: str = Field(..., description="User question to answer", min_length=1)
-    top_k: int = Field(
-        settings.default_top_k,
-        description="Number of relevant chunks to retrieve",
+    max_results: int = Field(
+        settings.default_max_results,
+        description="Maximum number of relevant chunks to retrieve",
         ge=1,
-        le=settings.max_top_k
+        le=settings.max_max_results
     )
     
     
@@ -296,7 +296,7 @@ async def query_documents(request: QueryRequest):
         # Uses cosine similarity or Euclidean distance to find relevant context
         similar_chunks = await vector_store.search(
             query_embedding=question_embedding,
-            top_k=request.top_k
+            max_results=request.max_results
         )
         
         if not similar_chunks:

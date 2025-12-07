@@ -246,7 +246,7 @@ ANSWER:"""
                 
                 # Ensure we have a valid gemini model name
                 if not model_name.startswith("gemini"):
-                    model_name = "gemini-1.5-flash"  # Default to stable model
+                    model_name = "gemini-2.5-flash"  # Default to stable model
                 
                 try:
                     model = genai.GenerativeModel(model_name)
@@ -259,10 +259,10 @@ ANSWER:"""
                     )
                     return response.text
                 except Exception as e:
-                    # If model not found, try with "gemini-pro" as fallback
-                    if "not found" in str(e).lower() and model_name != "gemini-pro":
-                        print(f"Model {model_name} not available, trying gemini-pro...")
-                        model = genai.GenerativeModel("gemini-pro")
+                    # If model not found, try with "gemini-2.5-flash" as fallback
+                    if "not found" in str(e).lower() and model_name != "gemini-2.5-flash":
+                        print(f"Model {model_name} not available, trying gemini-2.5-flash...")
+                        model = genai.GenerativeModel("gemini-2.5-flash")
                         response = model.generate_content(
                             prompt,
                             generation_config=genai.GenerationConfig(
@@ -316,7 +316,7 @@ ANSWER:"""
     async def generate_answer_with_sources(
         self,
         question: str,
-        top_k: int = 5
+        max_results: int = 5
     ) -> Dict[str, Any]:
         """
         Complete RAG pipeline: retrieve and generate in one method.
@@ -332,7 +332,7 @@ ANSWER:"""
         
         Args:
             question: User's question
-            top_k: Number of chunks to retrieve
+            max_results: Maximum number of chunks to retrieve
             
         Returns:
             Dictionary with answer, sources, and metadata
@@ -354,7 +354,7 @@ ANSWER:"""
         # Step 2: Retrieve relevant chunks
         context_chunks = await self.vector_store.search(
             query_embedding=question_embedding,
-            top_k=top_k
+            max_results=max_results
         )
         
         if not context_chunks:

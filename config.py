@@ -57,8 +57,8 @@ class Settings(BaseSettings):
     reload: bool = True
     
     # RAG Configuration
-    default_top_k: int = 5
-    max_top_k: int = 20
+    default_max_results: int = 5
+    max_max_results: int = 20
     rag_temperature: float = 0.3
     rag_max_tokens: int = 1000
     

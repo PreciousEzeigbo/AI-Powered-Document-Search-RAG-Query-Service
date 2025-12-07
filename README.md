@@ -130,7 +130,7 @@ Content-Type: application/json
 
 {
   "question": "What is the refund policy?",
-  "top_k": 5
+  "max_results": 5
 }
 ```
 
@@ -204,7 +204,7 @@ Query the document:
 ```bash
 curl -X POST "http://localhost:8000/query" \
   -H "Content-Type: application/json" \
-  -d '{"question": "What is this document about?", "top_k": 3}'
+  -d '{"question": "What is this document about?", "max_results": 3}'
 ```
 
 ## 📊 How RAG Works
@@ -216,7 +216,7 @@ curl -X POST "http://localhost:8000/query" \
 5. **Storage**: Vectors stored in ChromaDB, metadata in SQLite
 6. **Query Processing**:
    - User question → converted to embedding
-   - Vector search finds top-K similar chunks
+   - Vector search finds most similar chunks
    - Chunks + question sent to LLM
    - LLM generates grounded answer with sources
 

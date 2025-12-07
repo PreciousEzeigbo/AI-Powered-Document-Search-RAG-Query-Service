@@ -259,7 +259,7 @@ class VectorStore:
     async def search(
         self,
         query_embedding: List[float],
-        top_k: int = 5,
+        max_results: int = 5,
         filter_metadata: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
@@ -267,7 +267,7 @@ class VectorStore:
         
         This is the core retrieval operation for RAG:
         1. Takes a query embedding (question vector)
-        2. Finds top-K most similar document chunks
+        2. Finds most similar document chunks
         3. Returns chunks with similarity scores
         
         Similarity search algorithms:
@@ -278,7 +278,7 @@ class VectorStore:
         
         Args:
             query_embedding: Query vector to search for
-            top_k: Number of results to return
+            max_results: Maximum number of results to return
             filter_metadata: Optional filters (e.g., document_id)
             
         Returns:
@@ -296,15 +296,15 @@ class VectorStore:
         ]
         """
         if self.store_type == "chromadb":
-            return await self._search_chromadb(query_embedding, top_k, filter_metadata)
+            return await self._search_chromadb(query_embedding, max_results, filter_metadata)
         elif self.store_type == "pinecone":
-            return await self._search_pinecone(query_embedding, top_k, filter_metadata)
+            return await self._search_pinecone(query_embedding, max_results, filter_metadata)
     
     
     async def _search_chromadb(
         self,
         query_embedding: List[float],
-        top_k: int,
+        max_results: int,
         filter_metadata: Optional[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """
@@ -321,7 +321,7 @@ class VectorStore:
         # Query ChromaDB
         results = self.collection.query(
             query_embeddings=[query_embedding],
-            n_results=top_k,
+            n_results=max_results,
             where=where_clause,
             include=["documents", "metadatas", "distances"]
         )
@@ -349,7 +349,7 @@ class VectorStore:
     async def _search_pinecone(
         self,
         query_embedding: List[float],
-        top_k: int,
+        max_results: int,
         filter_metadata: Optional[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """
@@ -363,7 +363,7 @@ class VectorStore:
         # Query Pinecone
         results = self.collection.query(
             vector=query_embedding,
-            top_k=top_k,
+            top_k=max_results,
             filter=filter_metadata,
             include_metadata=True
         )
@@ -415,7 +415,7 @@ class VectorStore:
             
         elif self.store_type == "pinecone":
             # Pinecone doesn't have a direct "get by metadata" method
-            # We'd need to query with a dummy vector and high top_k
+            # We'd need to query with a dummy vector and high max_results
             # Or maintain a separate mapping
             # This is a simplified version
             return []
