@@ -53,7 +53,8 @@ export default function DocumentPanel({
         />
       )}
 
-      <div className="flex">
+      {/* Outer container - flex for panel + toggle button */}
+      <div className="flex h-full md:h-auto">
         {/* Panel Container - Desktop sidebar + Mobile bottom sheet */}
         <div
           ref={panelRef}
@@ -109,7 +110,7 @@ export default function DocumentPanel({
         </div>
         </div>
 
-        {/* Desktop Toggle Button - Only visible on desktop */}
+        {/* Desktop Toggle Button - positioned on right edge, inside outer container */}
         <button
           onClick={onToggle}
           className="hidden md:flex items-center justify-center w-8 border-l border-border bg-background hover:bg-secondary transition-colors"
