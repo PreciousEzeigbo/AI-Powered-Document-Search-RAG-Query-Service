@@ -120,6 +120,7 @@ export default function RAGChat() {
         onDelete={handleDeleteDocument}
         isOpen={isPanelOpen}
         onClose={() => setIsPanelOpen(false)}
+        onToggle={() => setIsPanelOpen(!isPanelOpen)}
         uploadingId={uploadingId}
         deletingId={deletingId}
         isUploading={isUploading}
@@ -127,16 +128,9 @@ export default function RAGChat() {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
-        {/* Header with Documents Toggle Button */}
-        <div className="border-b border-border px-4 py-3 flex items-center justify-between">
+        {/* Header */}
+        <div className="border-b border-border px-4 py-3 flex items-center">
           <h1 className="font-serif text-lg text-foreground">RAG Chat</h1>
-          <button
-            onClick={() => setIsPanelOpen(!isPanelOpen)}
-            className="font-mono-ui text-sm text-accent hover:text-accent/80 transition-colors"
-            title={isPanelOpen ? 'Hide documents' : 'Show documents'}
-          >
-            📁 Documents ({documents.length})
-          </button>
         </div>
 
         {/* Chat Content or Empty State */}
