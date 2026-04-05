@@ -39,11 +39,11 @@ export default function DocumentPanel({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  // Mobile: bottom sheet
-  // Desktop: left sidebar
+  // Mobile: bottom sheet (slides up when open)
+  // Desktop: left sidebar (always visible, toggleable)
   return (
     <>
-      {/* Backdrop */}
+      {/* Mobile Backdrop - only shows on mobile when panel is open */}
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/20 z-30 md:hidden"
@@ -51,16 +51,27 @@ export default function DocumentPanel({
         />
       )}
 
-      {/* Panel Container */}
+      {/* Panel Container - Desktop sidebar + Mobile bottom sheet */}
       <div
         ref={panelRef}
-        className={`fixed md:static flex flex-col bg-background border-border z-40
-          md:w-80 md:border-r md:translate-x-0
-          bottom-0 left-0 right-0 max-h-[80vh] md:max-h-full
-          transition-transform duration-250 ease-out
-          ${isOpen ? 'translate-y-0' : 'translate-y-full md:translate-y-0'}`}
+        className={`
+          flex flex-col bg-background border-border
+          transition-all duration-250 ease-out
+          
+          /* Mobile: bottom sheet behavior */
+          fixed md:static
+          bottom-0 left-0 right-0 max-h-[80vh] z-40
+          md:w-80 md:border-r md:max-h-full
+          
+          ${isOpen 
+            ? 'translate-y-0 md:translate-x-0' 
+            : 'translate-y-full md:translate-x-0 md:w-80'
+          }
+          
+          ${!isOpen ? 'md:hidden' : 'md:flex'}
+        `}
       >
-        {/* Header */}
+        {/* Mobile Header - close button for bottom sheet */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border md:hidden">
           <h2 className="font-mono-ui text-sm font-semibold text-foreground">
             Documents
@@ -73,6 +84,7 @@ export default function DocumentPanel({
           </button>
         </div>
 
+        {/* Desktop Header - always visible */}
         <h2 className="hidden md:block font-mono-ui text-sm font-semibold text-foreground px-4 py-3 border-b border-border">
           Documents
         </h2>

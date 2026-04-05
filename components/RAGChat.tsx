@@ -113,30 +113,29 @@ export default function RAGChat() {
 
   return (
     <div className="flex h-screen bg-background text-foreground">
-      {/* Document Panel - Desktop Sidebar */}
-      <div className="hidden md:flex md:w-80 md:flex-col border-r border-border">
-        <DocumentPanel
-          documents={documents}
-          onUpload={handleUploadFiles}
-          onDelete={handleDeleteDocument}
-          isOpen={true}
-          onClose={() => {}}
-          uploadingId={uploadingId}
-          deletingId={deletingId}
-          isUploading={isUploading}
-        />
-      </div>
+      {/* Document Panel - Only one instance, responsive via CSS */}
+      <DocumentPanel
+        documents={documents}
+        onUpload={handleUploadFiles}
+        onDelete={handleDeleteDocument}
+        isOpen={isPanelOpen}
+        onClose={() => setIsPanelOpen(false)}
+        uploadingId={uploadingId}
+        deletingId={deletingId}
+        isUploading={isUploading}
+      />
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
-        {/* Header with Mobile Menu Button */}
-        <div className="border-b border-border px-4 py-3 flex items-center justify-between md:hidden">
+        {/* Header with Documents Toggle Button */}
+        <div className="border-b border-border px-4 py-3 flex items-center justify-between">
           <h1 className="font-serif text-lg text-foreground">RAG Chat</h1>
           <button
-            onClick={() => setIsPanelOpen(true)}
+            onClick={() => setIsPanelOpen(!isPanelOpen)}
             className="font-mono-ui text-sm text-accent hover:text-accent/80 transition-colors"
+            title={isPanelOpen ? 'Hide documents' : 'Show documents'}
           >
-            ☰ Docs ({documents.length})
+            📁 Documents ({documents.length})
           </button>
         </div>
 
@@ -163,18 +162,6 @@ export default function RAGChat() {
           />
         )}
       </div>
-
-      {/* Document Panel - Mobile Bottom Sheet */}
-      <DocumentPanel
-        documents={documents}
-        onUpload={handleUploadFiles}
-        onDelete={handleDeleteDocument}
-        isOpen={isPanelOpen}
-        onClose={() => setIsPanelOpen(false)}
-        uploadingId={uploadingId}
-        deletingId={deletingId}
-        isUploading={isUploading}
-      />
     </div>
   );
 }
