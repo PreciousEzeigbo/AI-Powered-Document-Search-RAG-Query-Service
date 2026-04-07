@@ -55,7 +55,7 @@ function ChartContainer({
         data-slot="chart"
         data-chart={chartId}
         className={cn(
-          "[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border [&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted [&_.recharts-reference-line_[stroke='#ccc']]:stroke-border flex aspect-video justify-center text-xs [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
+          "[&_.recharts-cartesian-axis-tick_text]:fill-zinc-500 [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-zinc-300/60 [&_.recharts-curve.recharts-tooltip-cursor]:stroke-zinc-300 [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-zinc-300 [&_.recharts-radial-bar-background-sector]:fill-zinc-100 [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-zinc-100 [&_.recharts-reference-line_[stroke='#ccc']]:stroke-zinc-300 flex aspect-video justify-center text-xs dark:[&_.recharts-cartesian-axis-tick_text]:fill-zinc-400 dark:[&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-zinc-700/60 dark:[&_.recharts-curve.recharts-tooltip-cursor]:stroke-zinc-700 dark:[&_.recharts-polar-grid_[stroke='#ccc']]:stroke-zinc-700 dark:[&_.recharts-radial-bar-background-sector]:fill-zinc-900 dark:[&_.recharts-rectangle.recharts-tooltip-cursor]:fill-zinc-900 dark:[&_.recharts-reference-line_[stroke='#ccc']]:stroke-zinc-700 [&_.recharts-dot[stroke='#fff']]:stroke-transparent [&_.recharts-layer]:outline-hidden [&_.recharts-sector]:outline-hidden [&_.recharts-sector[stroke='#fff']]:stroke-transparent [&_.recharts-surface]:outline-hidden",
           className,
         )}
         {...props}
@@ -173,7 +173,7 @@ function ChartTooltipContent({
   return (
     <div
       className={cn(
-        'border-border/50 bg-background grid min-w-[8rem] items-start gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs shadow-xl',
+        'grid min-w-[8rem] items-start gap-1.5 rounded-lg border border-zinc-300 bg-zinc-50 px-2.5 py-1.5 text-xs shadow-none dark:border-zinc-700 dark:bg-zinc-950',
         className,
       )}
     >
@@ -188,7 +188,7 @@ function ChartTooltipContent({
             <div
               key={item.dataKey}
               className={cn(
-                '[&>svg]:text-muted-foreground flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5',
+                '[&>svg]:text-zinc-500 dark:[&>svg]:text-zinc-400 flex w-full flex-wrap items-stretch gap-2 [&>svg]:h-2.5 [&>svg]:w-2.5',
                 indicator === 'dot' && 'items-center',
               )}
             >
@@ -228,12 +228,12 @@ function ChartTooltipContent({
                   >
                     <div className="grid gap-1.5">
                       {nestLabel ? tooltipLabel : null}
-                      <span className="text-muted-foreground">
+                      <span className="text-zinc-500 dark:text-zinc-400">
                         {itemConfig?.label || item.name}
                       </span>
                     </div>
                     {item.value && (
-                      <span className="text-foreground font-mono font-medium tabular-nums">
+                      <span className="font-mono font-medium tabular-nums text-zinc-900 dark:text-zinc-50">
                         {item.value.toLocaleString()}
                       </span>
                     )}
@@ -282,7 +282,7 @@ function ChartLegendContent({
         return (
           <div
             key={item.value}
-            className="[&>svg]:text-muted-foreground flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3"
+            className="[&>svg]:text-zinc-500 dark:[&>svg]:text-zinc-400 flex items-center gap-1.5 [&>svg]:h-3 [&>svg]:w-3"
           >
             {itemConfig?.icon && !hideIcon ? (
               <itemConfig.icon />

@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ai-powered-document-search-rag-query-service"
+version = "0.1.0"
+description = "FastAPI-based document search and RAG query service"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi==0.104.1",
+    "uvicorn[standard]==0.24.0",
+    "python-multipart==0.0.6",
+    "aiohttp==3.9.0",
+    "aiosqlite==0.19.0",
+    "PyPDF2==3.0.1",
+    "python-docx==1.1.0",
+    "tiktoken==0.5.1",
+    "chromadb==0.4.18",
+    "numpy==1.26.4",
+    "sqlalchemy==2.0.37",
+    "pydantic==2.9.2",
+    "pydantic-settings==2.5.2",
+    "python-dotenv==1.0.0",
+    "google-generativeai==0.8.1",
+    "loguru==0.7.2",
+    "slowapi==0.1.9",
+    "faker==30.3.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

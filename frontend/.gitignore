@@ -14,3 +14,17 @@ next.user-config.*
 node_modules
 .next/
 .DS_Store
+chroma-logs/
+dist/
+build/
+chroma_data/
+logs/
+.env
+.venv
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.db

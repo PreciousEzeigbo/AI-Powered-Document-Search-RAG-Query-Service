@@ -6,7 +6,9 @@ Uses pydantic for validation and type safety.
 """
 
 from pydantic_settings import BaseSettings
-from typing import Optional
+from pydantic import Field, model_validator
+from typing import Any, Optional
+import os
 
 
 class Settings(BaseSettings):
@@ -27,8 +29,8 @@ class Settings(BaseSettings):
     """
     
     # API Keys
-    google_api_key: str = "your_api_key_here"
-    openrouter_api_key: str = "your_api_key_here"
+    google_api_key: Optional[str] = None
+    openrouter_api_key: Optional[str] = None
     use_google: bool = False
     
     # Model Configuration
@@ -41,6 +43,7 @@ class Settings(BaseSettings):
     
     pinecone_api_key: Optional[str] = None
     pinecone_environment: Optional[str] = None
+    api_access_key: Optional[str] = None
     
     database_path: str = "rag_documents.db"
     
@@ -54,14 +57,38 @@ class Settings(BaseSettings):
     
     host: str = "0.0.0.0"
     port: int = 8000
-    reload: bool = True
+    reload: bool = False
     
     # RAG Configuration
     default_max_results: int = 5
     max_max_results: int = 20
     rag_temperature: float = 0.3
     rag_max_tokens: int = 1000
+    llm_max_tokens: int = 1024
+
+    @model_validator(mode='before')
+    @classmethod
+    def map_legacy_rag_tokens(cls, values: Any) -> Any:
+        if isinstance(values, dict):
+            if values.get('llm_max_tokens') is None and values.get('rag_max_tokens') is not None:
+                values['llm_max_tokens'] = values['rag_max_tokens']
+        return values
     
+    # CORS Configuration
+    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+    
+    @model_validator(mode='after')
+    def validate_keys(self):
+        if os.getenv('ENV') != 'dev':
+            provider = (self.provider or '').strip().lower()
+            if provider == 'google' or self.use_google:
+                if not self.google_api_key or 'your_api_key_here' in self.google_api_key:
+                    raise ValueError('GOOGLE_API_KEY must be set when provider=google')
+            elif provider == 'openrouter':
+                if not self.openrouter_api_key or 'your_api_key_here' in self.openrouter_api_key:
+                    raise ValueError('OPENROUTER_API_KEY must be set when provider=openrouter')
+        return self
+
     class Config:
         """Pydantic configuration"""
         env_file = ".env"

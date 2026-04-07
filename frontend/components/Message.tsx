@@ -9,6 +9,8 @@ interface MessageProps {
   content: string;
   sources?: string[];
   isStreaming?: boolean;
+  isError?: boolean;
+  isSystem?: boolean;
 }
 
 export default function Message({
@@ -16,28 +18,38 @@ export default function Message({
   content,
   sources,
   isStreaming = false,
+  isError = false,
+  isSystem = false,
 }: MessageProps) {
   const isUser = role === 'user';
 
+  if (isSystem) {
+    return (
+      <div className="flex w-full justify-center">
+        <div className="max-w-[90%] rounded-md border border-zinc-300 bg-zinc-100 px-4 py-2 text-center font-mono text-xs text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
+          {content}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={`flex gap-4 animate-fade-in ${
-        isUser ? 'justify-end' : 'justify-start'
-      }`}
-    >
+    <div className={`flex w-full animate-fade-in ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[80%] ${
+        className={`w-full max-w-full rounded-md border px-4 py-4 ${
           isUser
-            ? 'bg-accent text-accent-foreground rounded-none'
-            : 'bg-transparent text-foreground'
+            ? 'max-w-[90%] border-zinc-900 bg-zinc-900 text-zinc-50 dark:border-zinc-200 dark:bg-zinc-200 dark:text-zinc-950'
+            : isError
+              ? 'border-zinc-300 bg-zinc-100 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100'
+              : 'border-zinc-300 bg-zinc-50 text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100'
         }`}
       >
         {isUser ? (
-          <div className="font-mono-ui text-sm leading-relaxed break-words">
+          <div className="font-mono text-sm leading-relaxed break-words">
             {content}
           </div>
         ) : (
-          <div className="font-serif text-base leading-relaxed break-words">
+          <div className="font-mono text-sm leading-relaxed break-words">
             {isStreaming ? (
               <StreamingText text={content} charDelay={30} />
             ) : (
@@ -45,14 +57,13 @@ export default function Message({
             )}
           </div>
         )}
+        {!isUser && isStreaming && (
+          <div className="mt-2">
+            <TypingIndicator />
+          </div>
+        )}
         {!isUser && sources && <SourcesFootnote sources={sources} />}
       </div>
-
-      {isStreaming && isUser === false && (
-        <div className="absolute right-4">
-          <TypingIndicator />
-        </div>
-      )}
     </div>
   );
 }

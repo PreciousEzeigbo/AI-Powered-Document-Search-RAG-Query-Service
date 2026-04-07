@@ -14,13 +14,13 @@ export default function SourcesFootnote({ sources }: SourcesFootnoteProps) {
   }
 
   return (
-    <div className="mt-4 border-t border-border pt-3">
+    <div className="mt-4 border-t border-zinc-300 pt-3 dark:border-zinc-700">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="flex items-center gap-2 text-sm font-mono-ui text-muted-foreground hover:text-foreground transition-colors"
+        className="inline-flex min-h-[44px] min-w-[44px] items-center gap-2 rounded-md px-2 font-mono text-xs text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
       >
-        <span className="text-xs">►</span>
-        <span>Sources ({sources.length})</span>
+        <span className="text-[10px]">{isExpanded ? 'v' : '>'}</span>
+        <span>sources ({sources.length})</span>
       </button>
 
       <div
@@ -30,7 +30,7 @@ export default function SourcesFootnote({ sources }: SourcesFootnoteProps) {
           opacity: isExpanded ? 1 : 0,
         }}
       >
-        <ul className="mt-2 ml-5 space-y-1 text-xs font-mono-ui text-muted-foreground">
+        <ul className="mt-2 ml-5 space-y-1 font-mono text-xs text-zinc-500 dark:text-zinc-400">
           {sources.map((source, idx) => (
             <li key={idx} className="list-disc">{source}</li>
           ))}

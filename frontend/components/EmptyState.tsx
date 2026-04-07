@@ -1,18 +1,25 @@
 'use client';
 
-export default function EmptyState() {
+interface EmptyStateProps {
+  onOpenDocuments?: () => void;
+}
+
+export default function EmptyState({ onOpenDocuments }: EmptyStateProps) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
-      <h1 className="font-serif text-2xl text-foreground mb-4">
-        Upload documents to get started
-      </h1>
-      <p className="font-mono-ui text-sm text-muted-foreground max-w-sm mb-8">
-        Add PDFs, text files, or documents to your library, then ask questions about their content.
-      </p>
-      <div className="text-xs font-mono-ui text-muted-foreground space-y-1">
-        <p>✓ Drag and drop files or click to browse</p>
-        <p>✓ Ask natural language questions</p>
-        <p>✓ Get answers with source citations</p>
+    <div className="flex h-full items-center justify-center py-8">
+      <div className="w-full rounded-md border border-dashed border-zinc-300 bg-transparent px-8 py-8 text-center dark:border-zinc-700">
+        <h2 className="font-mono text-sm text-zinc-900 dark:text-zinc-50">&gt; no document loaded_</h2>
+        <p className="mx-auto mt-6 max-w-md font-mono text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+          upload a PDF, TXT or DOCX to start asking questions
+        </p>
+
+        <button
+          type="button"
+          onClick={onOpenDocuments}
+          className="mt-6 inline-flex min-h-[44px] min-w-[220px] items-center justify-center rounded-md bg-zinc-900 px-4 py-2 font-mono text-sm text-zinc-50 transition-colors hover:bg-zinc-700"
+        >
+          [ upload a document ]
+        </button>
       </div>
     </div>
   );

@@ -31,9 +31,8 @@ function FieldLegend({
       data-slot="field-legend"
       data-variant={variant}
       className={cn(
-        'mb-3 font-medium',
-        'data-[variant=legend]:text-base',
-        'data-[variant=label]:text-sm',
+        'mb-3 font-mono font-medium text-zinc-900 dark:text-zinc-50',
+        'data-[variant=legend]:text-sm data-[variant=label]:text-xs data-[variant=legend]:tracking-[0.12em] data-[variant=label]:tracking-[0.12em] data-[variant=legend]:uppercase data-[variant=label]:uppercase',
         className,
       )}
       {...props}
@@ -55,7 +54,7 @@ function FieldGroup({ className, ...props }: React.ComponentProps<'div'>) {
 }
 
 const fieldVariants = cva(
-  'group/field flex w-full gap-3 data-[invalid=true]:text-destructive',
+  'group/field flex w-full gap-3 data-[invalid=true]:text-zinc-900 dark:data-[invalid=true]:text-zinc-50',
   {
     variants: {
       orientation: {
@@ -117,7 +116,7 @@ function FieldLabel({
       className={cn(
         'group/field-label peer/field-label flex w-fit gap-2 leading-snug group-data-[disabled=true]/field:opacity-50',
         'has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col has-[>[data-slot=field]]:rounded-md has-[>[data-slot=field]]:border [&>*]:data-[slot=field]:p-4',
-        'has-data-[state=checked]:bg-primary/5 has-data-[state=checked]:border-primary dark:has-data-[state=checked]:bg-primary/10',
+        'has-data-[state=checked]:border-zinc-500 has-data-[state=checked]:bg-zinc-100 dark:has-data-[state=checked]:border-zinc-400 dark:has-data-[state=checked]:bg-zinc-900',
         className,
       )}
       {...props}
@@ -143,7 +142,7 @@ function FieldDescription({ className, ...props }: React.ComponentProps<'p'>) {
     <p
       data-slot="field-description"
       className={cn(
-        'text-muted-foreground text-sm leading-normal font-normal group-has-[[data-orientation=horizontal]]/field:text-balance',
+        'font-mono text-xs leading-normal font-normal text-zinc-500 group-has-[[data-orientation=horizontal]]/field:text-balance dark:text-zinc-400',
         'last:mt-0 nth-last-2:-mt-1 [[data-variant=legend]+&]:-mt-1.5',
         '[&>a:hover]:text-primary [&>a]:underline [&>a]:underline-offset-4',
         className,
@@ -172,8 +171,8 @@ function FieldSeparator({
     >
       <Separator className="absolute inset-0 top-1/2" />
       {children && (
-        <span
-          className="bg-background text-muted-foreground relative mx-auto block w-fit px-2"
+          <span
+            className="relative mx-auto block w-fit bg-zinc-50 px-2 font-mono text-[10px] text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400"
           data-slot="field-separator-content"
         >
           {children}
@@ -222,7 +221,7 @@ function FieldError({
     <div
       role="alert"
       data-slot="field-error"
-      className={cn('text-destructive text-sm font-normal', className)}
+      className={cn('font-mono text-xs font-normal text-zinc-900 dark:text-zinc-50', className)}
       {...props}
     >
       {content}

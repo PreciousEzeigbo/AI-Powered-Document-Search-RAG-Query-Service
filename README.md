@@ -56,6 +56,7 @@ Question → Embedding → Vector Search → Top-K Chunks → LLM → Answer
 ### Prerequisites
 
 - Python 3.12+
+- uv ([install guide](https://docs.astral.sh/uv/getting-started/installation/))
 - Google Gemini API Key ([Get one free](https://aistudio.google.com/app/apikey))
 
 ### Installation
@@ -66,16 +67,15 @@ git clone https://github.com/PreciousEzeigbo/AI-Powered-Document-Search-RAG-Quer
 cd AI-Powered-Document-Search-RAG-Query-Service
 ```
 
-2. **Create and activate virtual environment**
+2. **Create and activate a uv environment**
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 ```
 
 3. **Install dependencies**
 ```bash
-pip install -r requirements.txt
-pip install pydantic-settings google-generativeai
+uv sync
 ```
 
 4. **Configure environment variables**
@@ -101,7 +101,7 @@ PORT=8000
 
 5. **Run the service**
 ```bash
-python3 main.py
+uv run uvicorn main:app --reload
 ```
 
 The service will start at `http://localhost:8000`
@@ -163,17 +163,26 @@ GET /health
 
 ```
 AI-RAG-Query-Service/
-├── main.py                  # FastAPI application & endpoints
-├── config.py                # Configuration management
-├── embeddings_service.py    # Embedding generation
-├── vector_store.py          # ChromaDB interface
-├── rag_service.py           # RAG pipeline orchestration
-├── database.py              # SQLite metadata storage
-├── document_processor.py    # Document parsing & chunking
-├── requirements.txt         # Python dependencies
-├── .env.sample             # Environment variables template
-├── .gitignore              # Git ignore rules
-└── README.md               # This file
+├── app/                     # Packaged FastAPI backend
+│   ├── main.py              # FastAPI application & endpoints
+│   ├── config.py            # Package re-exports
+│   ├── database.py          # Package re-exports
+│   ├── document_processor.py
+│   ├── embeddings_service.py
+│   ├── rag_service.py
+│   └── vector_store.py
+├── main.py                  # Legacy direct launcher
+├── config.py                # Legacy module compatibility
+├── embeddings_service.py    # Legacy module compatibility
+├── vector_store.py          # Legacy module compatibility
+├── rag_service.py           # Legacy module compatibility
+├── database.py              # Legacy module compatibility
+├── document_processor.py    # Legacy module compatibility
+├── pyproject.toml           # Python dependencies and uv metadata
+├── requirements.txt         # Legacy dependency list for compatibility
+├── .env.sample              # Environment variables template
+├── .gitignore               # Git ignore rules
+└── README.md                # This file
 ```
 
 ## 🔧 Configuration

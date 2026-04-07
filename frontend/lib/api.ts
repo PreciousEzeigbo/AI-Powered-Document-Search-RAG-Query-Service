@@ -3,6 +3,9 @@
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 const DEMO_MODE = !API_BASE_URL; // Enable demo mode when no API URL is configured
+export const MAX_UPLOAD_SIZE_MB = 50;
+export const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
+const API_ACCESS_KEY = process.env.NEXT_PUBLIC_API_ACCESS_KEY;
 
 export interface UploadResponse {
   document_id: string;
@@ -14,6 +17,27 @@ export interface QueryResponse {
   answer: string;
   sources: string[];
 }
+
+export type QueryHistoryTurn = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
+export interface QueryRequestPayload {
+  question: string;
+  documentId: string;
+  history: QueryHistoryTurn[];
+}
+
+type BackendChunk = {
+  chunk_id: string;
+  text: string;
+};
+
+type BackendQueryResponse = {
+  answer: string;
+  chunks_used?: BackendChunk[];
+};
 
 // Demo responses for testing without a backend
 const DEMO_RESPONSES: Record<string, QueryResponse> = {
@@ -38,13 +62,21 @@ export async function uploadDocument(file: File): Promise<UploadResponse> {
   formData.append('file', file);
 
   try {
-    const response = await fetch(`${API_BASE_URL}/upload`, {
+    const response = await fetch(`${API_BASE_URL}/documents/upload`, {
       method: 'POST',
+      headers: API_ACCESS_KEY ? { 'X-API-Key': API_ACCESS_KEY } : undefined,
       body: formData,
     });
 
     if (!response.ok) {
-      throw new Error(`Upload failed: ${response.statusText}`);
+      let detail = response.statusText;
+      try {
+        const errorBody = await response.json();
+        detail = errorBody?.detail ?? detail;
+      } catch {
+        // Ignore JSON parsing errors and keep status text fallback.
+      }
+      throw new Error(`Upload failed: ${detail}`);
     }
 
     return await response.json();
@@ -64,7 +96,13 @@ export async function deleteDocument(documentId: string): Promise<{ status: stri
   try {
     const response = await fetch(`${API_BASE_URL}/documents/${documentId}`, {
       method: 'DELETE',
+      headers: API_ACCESS_KEY ? { 'X-API-Key': API_ACCESS_KEY } : undefined,
     });
+
+    if (response.status === 404) {
+      // Stale client state: document may already be removed on backend.
+      return { status: 'success' };
+    }
 
     if (!response.ok) {
       throw new Error(`Delete failed: ${response.statusText}`);
@@ -77,7 +115,7 @@ export async function deleteDocument(documentId: string): Promise<{ status: stri
   }
 }
 
-export async function queryDocuments(question: string): Promise<QueryResponse> {
+export async function queryDocuments(payload: QueryRequestPayload): Promise<QueryResponse> {
   if (DEMO_MODE) {
     // Demo mode: return demo response after a realistic delay
     await new Promise(resolve => setTimeout(resolve, 1200));
@@ -89,15 +127,31 @@ export async function queryDocuments(question: string): Promise<QueryResponse> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(API_ACCESS_KEY ? { 'X-API-Key': API_ACCESS_KEY } : {}),
       },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({
+        question: payload.question,
+        document_id: payload.documentId,
+        history: payload.history,
+      }),
     });
 
     if (!response.ok) {
-      throw new Error(`Query failed: ${response.statusText}`);
+      let detail = response.statusText;
+      try {
+        const errorBody = await response.json();
+        detail = errorBody?.detail ?? detail;
+      } catch {
+        // Ignore JSON parsing errors and keep status text fallback.
+      }
+      throw new Error(`Query failed: ${detail}`);
     }
 
-    return await response.json();
+    const data: BackendQueryResponse = await response.json();
+    return {
+      answer: data.answer,
+      sources: (data.chunks_used ?? []).map((chunk) => chunk.chunk_id),
+    };
   } catch (error) {
     console.error('Query error:', error);
     throw error;
