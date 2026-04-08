@@ -1,8 +1,8 @@
 // API client functions for RAG backend integration
 // Falls back to demo mode when NEXT_PUBLIC_API_URL is not configured
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL;
-const DEMO_MODE = !API_BASE_URL; // Enable demo mode when no API URL is configured
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === 'true'; // Set to true in env explicitly if demo mode is wanted
 export const MAX_UPLOAD_SIZE_MB = 50;
 export const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
 const API_ACCESS_KEY = process.env.NEXT_PUBLIC_API_ACCESS_KEY;
@@ -27,6 +27,7 @@ export interface QueryRequestPayload {
   question: string;
   documentId: string;
   history: QueryHistoryTurn[];
+  sessionId: string;
 }
 
 type BackendChunk = {
@@ -47,7 +48,7 @@ const DEMO_RESPONSES: Record<string, QueryResponse> = {
   },
 };
 
-export async function uploadDocument(file: File): Promise<UploadResponse> {
+export async function uploadDocument(file: File, sessionId: string): Promise<UploadResponse> {
   if (DEMO_MODE) {
     // Demo mode: simulate successful upload with a generated ID
     await new Promise(resolve => setTimeout(resolve, 800));
@@ -64,7 +65,10 @@ export async function uploadDocument(file: File): Promise<UploadResponse> {
   try {
     const response = await fetch(`${API_BASE_URL}/documents/upload`, {
       method: 'POST',
-      headers: API_ACCESS_KEY ? { 'X-API-Key': API_ACCESS_KEY } : undefined,
+      headers: {
+        ...(API_ACCESS_KEY ? { 'X-API-Key': API_ACCESS_KEY } : {}),
+        'X-Session-Id': sessionId,
+      },
       body: formData,
     });
 
@@ -76,7 +80,7 @@ export async function uploadDocument(file: File): Promise<UploadResponse> {
       } catch {
         // Ignore JSON parsing errors and keep status text fallback.
       }
-      throw new Error(`Upload failed: ${detail}`);
+      throw `Upload failed: ${detail}`;
     }
 
     return await response.json();
@@ -86,7 +90,7 @@ export async function uploadDocument(file: File): Promise<UploadResponse> {
   }
 }
 
-export async function deleteDocument(documentId: string): Promise<{ status: string }> {
+export async function deleteDocument(documentId: string, sessionId: string): Promise<{ status: string }> {
   if (DEMO_MODE) {
     // Demo mode: simulate successful deletion
     await new Promise(resolve => setTimeout(resolve, 300));
@@ -96,7 +100,10 @@ export async function deleteDocument(documentId: string): Promise<{ status: stri
   try {
     const response = await fetch(`${API_BASE_URL}/documents/${documentId}`, {
       method: 'DELETE',
-      headers: API_ACCESS_KEY ? { 'X-API-Key': API_ACCESS_KEY } : undefined,
+      headers: {
+        ...(API_ACCESS_KEY ? { 'X-API-Key': API_ACCESS_KEY } : {}),
+        'X-Session-Id': sessionId,
+      },
     });
 
     if (response.status === 404) {
@@ -105,7 +112,7 @@ export async function deleteDocument(documentId: string): Promise<{ status: stri
     }
 
     if (!response.ok) {
-      throw new Error(`Delete failed: ${response.statusText}`);
+      throw `Delete failed: ${response.statusText}`;
     }
 
     return await response.json();
@@ -128,6 +135,7 @@ export async function queryDocuments(payload: QueryRequestPayload): Promise<Quer
       headers: {
         'Content-Type': 'application/json',
         ...(API_ACCESS_KEY ? { 'X-API-Key': API_ACCESS_KEY } : {}),
+        'X-Session-Id': payload.sessionId,
       },
       body: JSON.stringify({
         question: payload.question,
@@ -144,7 +152,7 @@ export async function queryDocuments(payload: QueryRequestPayload): Promise<Quer
       } catch {
         // Ignore JSON parsing errors and keep status text fallback.
       }
-      throw new Error(`Query failed: ${detail}`);
+      throw `Query failed: ${detail}`;
     }
 
     const data: BackendQueryResponse = await response.json();

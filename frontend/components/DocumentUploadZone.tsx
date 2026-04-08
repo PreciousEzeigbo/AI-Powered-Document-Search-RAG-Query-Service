@@ -52,9 +52,8 @@ export default function DocumentUploadZone({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`min-h-[160px] cursor-pointer rounded-md border-2 border-dashed border-zinc-300 p-6 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800/40 ${
-        isDragOver ? 'bg-zinc-100 dark:bg-zinc-800/60' : ''
-      } ${isLoading ? 'cursor-not-allowed opacity-50' : ''}`}
+      className={`min-h-[160px] cursor-pointer rounded-md border-2 border-dashed border-zinc-300 p-6 transition-colors hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800/40 ${isDragOver ? 'bg-zinc-100 dark:bg-zinc-800/60' : ''
+        } ${isLoading ? 'cursor-not-allowed opacity-50' : ''}`}
       onClick={() => !isLoading && inputRef.current?.click()}
     >
       <input
@@ -71,7 +70,7 @@ export default function DocumentUploadZone({
           {isLoading ? 'uploading document...' : 'drop files here or click to browse_'}
         </p>
         <p className="mt-2 font-mono text-xs text-zinc-500 dark:text-zinc-400">
-          supported formats: pdf, txt, docx | max size: {MAX_UPLOAD_SIZE_MB} MB
+          supported formats: pdf, txt, docx | limits: {MAX_UPLOAD_SIZE_MB} MB / ~75,000 words
         </p>
 
         {status?.phase === 'uploading' && (

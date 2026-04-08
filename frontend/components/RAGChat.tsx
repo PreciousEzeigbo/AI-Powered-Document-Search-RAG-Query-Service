@@ -173,9 +173,16 @@ export default function RAGChat() {
   }, [messages, selectedDocumentId, sessionToken]);
 
   const toFriendlyError = (fallback: string, err: unknown): string => {
-    if (!(err instanceof Error)) return fallback;
+    let message = '';
+    if (err instanceof Error) {
+      message = err.message;
+    } else if (typeof err === 'string') {
+      message = err;
+    } else {
+      return fallback;
+    }
 
-    const clean = err.message
+    const clean = message
       .replace(/^Upload failed:\s*/i, '')
       .replace(/^Query failed:\s*/i, '')
       .replace(/^Delete failed:\s*/i, '')
@@ -183,6 +190,18 @@ export default function RAGChat() {
 
     if (!clean) return fallback;
     if (/traceback|exception|stack|internal server error/i.test(clean)) return fallback;
+
+    // Pro User-Facing Translations
+    if (/No text could be extracted/i.test(clean)) {
+      return "We couldn't read any text. This might be a scanned image or protected PDF. Please upload a searchable document.";
+    }
+    if (/too much text/i.test(clean)) {
+      return "This document is extremely large and exceeds processing limits. Please split it into smaller chapters or sections.";
+    }
+    if (/quota exhausted/i.test(clean)) {
+      return "You have exhausted your daily 1,000 requests Google Free Tier API embedding quota. Please wait 24 hours for the reset or switch to a paid API key.";
+    }
+
     return clean;
   };
 
@@ -210,7 +229,7 @@ export default function RAGChat() {
       let completed = 0;
 
       for (const file of files) {
-        const response = await uploadDocument(file);
+        const response = await uploadDocument(file, sessionToken);
         const newDoc: StoredDocument = {
           document_id: response.document_id,
           filename: response.filename,
@@ -258,7 +277,7 @@ export default function RAGChat() {
     setDeletingId(documentId);
 
     try {
-      await deleteDocument(documentId);
+      await deleteDocument(documentId, sessionToken);
       const updated = removeDocument(documentId);
       setDocuments(updated);
 
@@ -312,18 +331,19 @@ export default function RAGChat() {
         question,
         documentId: selectedDocumentId,
         history,
+        sessionId: sessionToken,
       });
       setMessages((prev) =>
         prev.map((msg) =>
           msg.id === pendingAssistantId
             ? {
-                ...msg,
-                content: response.answer,
-                sources: response.sources,
-                isStreaming: false,
-                isError: false,
-                timestamp: Date.now(),
-              }
+              ...msg,
+              content: response.answer,
+              sources: response.sources,
+              isStreaming: false,
+              isError: false,
+              timestamp: Date.now(),
+            }
             : msg
         )
       );
@@ -337,12 +357,12 @@ export default function RAGChat() {
         prev.map((msg) =>
           msg.id === pendingAssistantId
             ? {
-                ...msg,
-                content: message,
-                isStreaming: false,
-                isError: true,
-                timestamp: Date.now(),
-              }
+              ...msg,
+              content: message,
+              isStreaming: false,
+              isError: true,
+              timestamp: Date.now(),
+            }
             : msg
         )
       );

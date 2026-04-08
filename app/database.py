@@ -1,11 +1,12 @@
 """SQLAlchemy async database layer and FastAPI dependencies."""
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from fastapi import HTTPException, Request
 from loguru import logger
-from sqlalchemy import Integer, String, Text, delete, func, select
+from sqlalchemy import Integer, String, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -23,23 +24,23 @@ class Document(Base):
     __tablename__ = "documents"
 
     document_id: Mapped[str] = mapped_column(String, primary_key=True)
+    session_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     filename: Mapped[str] = mapped_column(String, nullable=False)
     file_type: Mapped[str] = mapped_column(String, nullable=False)
     upload_date: Mapped[str] = mapped_column(String, nullable=False, index=True)
     chunk_count: Mapped[int] = mapped_column(Integer, nullable=False)
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=False)
-    extracted_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 @dataclass
 class DocumentMetadata:
     document_id: str
+    session_id: str
     filename: str
     file_type: str
     upload_date: str
     chunk_count: int
     total_tokens: int
-    extracted_text: str
 
 
 class Database:
@@ -53,7 +54,7 @@ class Database:
     async def initialize(self) -> None:
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-        logger.info(f"Database initialized at {self.db_path}")
+        logger.info("Database initialized at {}", self.db_path)
 
     async def get_session(self) -> AsyncSession:
         return self.session_factory()
@@ -63,62 +64,38 @@ class Database:
             session.add(
                 Document(
                     document_id=metadata.document_id,
+                    session_id=metadata.session_id,
                     filename=metadata.filename,
                     file_type=metadata.file_type,
                     upload_date=metadata.upload_date,
                     chunk_count=metadata.chunk_count,
                     total_tokens=metadata.total_tokens,
-                    extracted_text=metadata.extracted_text,
                 )
             )
             await session.commit()
 
-    async def get_document_by_id(self, document_id: str) -> Optional[Dict[str, Any]]:
+    async def get_document_by_id(
+        self, document_id: str, session_id: str
+    ) -> Optional[Dict[str, Any]]:
         async with self.session_factory() as session:
             row = await session.get(Document, document_id)
-            if not row:
+            if not row or row.session_id != session_id:
                 return None
             return {
                 "document_id": row.document_id,
+                "session_id": row.session_id,
                 "filename": row.filename,
                 "file_type": row.file_type,
                 "upload_date": row.upload_date,
                 "chunk_count": row.chunk_count,
                 "total_tokens": row.total_tokens,
-                "extracted_text": row.extracted_text or "",
             }
 
-    async def get_all_documents(self) -> List[Dict[str, Any]]:
-        async with self.session_factory() as session:
-            result = await session.execute(select(Document).order_by(Document.upload_date.desc()))
-            rows = result.scalars().all()
-            return [
-                {
-                    "document_id": row.document_id,
-                    "filename": row.filename,
-                    "file_type": row.file_type,
-                    "upload_date": row.upload_date,
-                    "chunk_count": row.chunk_count,
-                    "total_tokens": row.total_tokens,
-                }
-                for row in rows
-            ]
-
-    async def delete_document(self, document_id: str) -> bool:
-        async with self.session_factory() as session:
-            result = await session.execute(delete(Document).where(Document.document_id == document_id))
-            await session.commit()
-            return (result.rowcount or 0) > 0
-
-    async def get_documents_by_date_range(
-        self,
-        start_date: str,
-        end_date: str
-    ) -> List[Dict[str, Any]]:
+    async def get_all_documents(self, session_id: str) -> List[Dict[str, Any]]:
         async with self.session_factory() as session:
             result = await session.execute(
                 select(Document)
-                .where(Document.upload_date.between(start_date, end_date))
+                .where(Document.session_id == session_id)
                 .order_by(Document.upload_date.desc())
             )
             rows = result.scalars().all()
@@ -130,19 +107,66 @@ class Database:
                     "upload_date": row.upload_date,
                     "chunk_count": row.chunk_count,
                     "total_tokens": row.total_tokens,
-                    "extracted_text": row.extracted_text or "",
                 }
                 for row in rows
             ]
 
-    async def get_statistics(self) -> Dict[str, Any]:
+    async def delete_document(self, document_id: str, session_id: str) -> bool:
         async with self.session_factory() as session:
-            total_documents = (await session.execute(select(func.count(Document.document_id)))).scalar() or 0
-            total_chunks = (await session.execute(select(func.sum(Document.chunk_count)))).scalar() or 0
-            total_tokens = (await session.execute(select(func.sum(Document.total_tokens)))).scalar() or 0
+            result = await session.execute(
+                delete(Document).where(
+                    Document.document_id == document_id,
+                    Document.session_id == session_id,
+                )
+            )
+            await session.commit()
+            return (result.rowcount or 0) > 0
+
+    async def get_documents_by_date_range(
+        self,
+        start_date: str,
+        end_date: str,
+        session_id: str,
+    ) -> List[Dict[str, Any]]:
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(Document)
+                .where(
+                    Document.session_id == session_id,
+                    Document.upload_date.between(start_date, end_date),
+                )
+                .order_by(Document.upload_date.desc())
+            )
+            rows = result.scalars().all()
+            return [
+                {
+                    "document_id": row.document_id,
+                    "filename": row.filename,
+                    "file_type": row.file_type,
+                    "upload_date": row.upload_date,
+                    "chunk_count": row.chunk_count,
+                    "total_tokens": row.total_tokens,
+                }
+                for row in rows
+            ]
+
+    async def get_statistics(self, session_id: str) -> Dict[str, Any]:
+        async with self.session_factory() as session:
+            base = select(Document).where(Document.session_id == session_id).subquery()
+            total_documents = (
+                await session.execute(select(func.count(base.c.document_id)))
+            ).scalar() or 0
+            total_chunks = (
+                await session.execute(select(func.sum(base.c.chunk_count)))
+            ).scalar() or 0
+            total_tokens = (
+                await session.execute(select(func.sum(base.c.total_tokens)))
+            ).scalar() or 0
 
             by_file_type_result = await session.execute(
-                select(Document.file_type, func.count(Document.file_type)).group_by(Document.file_type)
+                select(base.c.file_type, func.count(base.c.file_type)).group_by(
+                    base.c.file_type
+                )
             )
             by_file_type = {row[0]: row[1] for row in by_file_type_result.fetchall()}
 
@@ -152,6 +176,44 @@ class Database:
                 "total_tokens": total_tokens,
                 "by_file_type": by_file_type,
             }
+
+    # ----- Retention / cleanup -------------------------------------------
+
+    async def purge_expired_sessions(self, ttl_hours: int) -> int:
+        """Delete documents belonging to sessions older than *ttl_hours*.
+
+        Returns the number of deleted rows.
+        """
+        if ttl_hours <= 0:
+            return 0
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=ttl_hours)).isoformat()
+
+        async with self.session_factory() as session:
+            # Collect session_ids to purge for return value
+            result = await session.execute(
+                delete(Document).where(Document.upload_date < cutoff)
+            )
+            await session.commit()
+            deleted = result.rowcount or 0
+            if deleted:
+                logger.info("Purged {} expired document(s) older than {}h", deleted, ttl_hours)
+            return deleted
+
+    async def get_expired_session_ids(self, ttl_hours: int) -> List[str]:
+        """Return distinct session_ids whose documents are all older than *ttl_hours*."""
+        if ttl_hours <= 0:
+            return []
+
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=ttl_hours)).isoformat()
+
+        async with self.session_factory() as session:
+            result = await session.execute(
+                select(Document.session_id)
+                .where(Document.upload_date < cutoff)
+                .group_by(Document.session_id)
+            )
+            return [row[0] for row in result.fetchall()]
 
     async def close(self) -> None:
         await self.engine.dispose()

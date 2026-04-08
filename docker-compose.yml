@@ -1,0 +1,35 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rag_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_PATH=/app/data/rag_documents.db
+      - ENV=prod
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - API_ACCESS_KEY=${API_ACCESS_KEY:-}
+    volumes:
+      - rag_data:/app/data
+      - chroma_data:/app/chroma_data
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: rag_frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+    depends_on:
+      - backend
+
+volumes:
+  rag_data:
+  chroma_data:

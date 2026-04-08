@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
+import asyncio
 from io import BytesIO
 import uuid
 from typing import Any, Dict, List
 
-import PyPDF2
+import fitz  # PyMuPDF
 import docx
 import tiktoken
 from fastapi import HTTPException, UploadFile
@@ -18,6 +19,16 @@ from app.core.embeddings import EmbeddingsStore
 
 class DocumentService:
     """Document ingestion, chunking, embedding, storage, and management."""
+
+    # MIME types accepted for each file extension
+    _ALLOWED_MIME_TYPES: Dict[str, set[str]] = {
+        ".pdf": {"application/pdf"},
+        ".docx": {
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/zip",
+        },
+        ".txt": {"text/plain", "application/octet-stream"},
+    }
 
     def __init__(
         self,
@@ -53,10 +64,10 @@ class DocumentService:
 
     def _extract_from_pdf(self, content: bytes) -> str:
         try:
-            pdf_reader = PyPDF2.PdfReader(BytesIO(content))
+            doc = fitz.open(stream=content, filetype="pdf")
             text_parts = []
-            for page_num, page in enumerate(pdf_reader.pages):
-                page_text = page.extract_text()
+            for page_num, page in enumerate(doc):
+                page_text = page.get_text()
                 if page_text and page_text.strip():
                     text_parts.append(f"[Page {page_num + 1}]\n{page_text}")
             return "\n\n".join(text_parts)
@@ -136,7 +147,9 @@ class DocumentService:
 
         return b"".join(chunks)
 
-    async def upload_document(self, file: UploadFile) -> DocumentUploadResponse:
+    async def upload_document(
+        self, file: UploadFile, session_id: str
+    ) -> DocumentUploadResponse:
         try:
             if not file.filename:
                 raise HTTPException(status_code=400, detail="Filename is required")
@@ -147,6 +160,14 @@ class DocumentService:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Unsupported file type. Allowed: {', '.join(allowed_extensions)}",
+                )
+
+            # Secondary MIME-type validation
+            content_type = (file.content_type or "").lower()
+            allowed_mimes = self._ALLOWED_MIME_TYPES.get(file_extension, set())
+            if content_type and allowed_mimes and content_type not in allowed_mimes:
+                logger.warning(
+                    "MIME mismatch: ext={} content_type={}", file_extension, content_type
                 )
 
             max_size_bytes = settings.max_file_size_mb * 1024 * 1024
@@ -170,13 +191,32 @@ class DocumentService:
                     )
 
             extracted_text = self.extract_text(content, effective_extension)
+
+            # V-02: Clear raw file content from memory immediately after extraction
+            del content
+
             if not extracted_text.strip():
                 raise HTTPException(status_code=400, detail="No text could be extracted from the document")
 
             chunks = self.chunk_text(extracted_text)
+
+            # V-02: Clear extracted text from memory after chunking
+            del extracted_text
+            
+            if len(chunks) > settings.max_chunks_per_document:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"Document contains too much text ({len(chunks)} chunks). The maximum allowed for this API tier is {settings.max_chunks_per_document} chunks."
+                )
+
+            texts = [chunk["text"] for chunk in chunks]
+            
+            embeddings = await self.embeddings.generate_embeddings_batch(
+                texts, task_type="retrieval_document"
+            )
+
             chunk_embeddings = []
-            for i, chunk in enumerate(chunks):
-                embedding = await self.embeddings.generate_embedding(chunk["text"], task_type="retrieval_document")
+            for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
                 chunk_embeddings.append(
                     {
                         "chunk_id": f"{document_id}_chunk_{i}",
@@ -184,6 +224,7 @@ class DocumentService:
                         "embedding": embedding,
                         "metadata": {
                             "document_id": document_id,
+                            "session_id": session_id,
                             "chunk_index": i,
                             "token_count": chunk["token_count"],
                         },
@@ -193,14 +234,15 @@ class DocumentService:
             await self.embeddings.add_embeddings(chunk_embeddings)
             total_tokens = sum(chunk["token_count"] for chunk in chunks)
 
+            # V-01: No extracted_text stored in database
             metadata = DocumentMetadata(
                 document_id=document_id,
+                session_id=session_id,
                 filename=file.filename,
                 file_type=effective_extension,
                 upload_date=datetime.now(timezone.utc).isoformat(),
                 chunk_count=len(chunks),
                 total_tokens=total_tokens,
-                extracted_text=extracted_text[:1000],
             )
             await self.database.save_document_metadata(metadata)
 
@@ -215,14 +257,20 @@ class DocumentService:
         except HTTPException:
             raise
         except (ValueError, UnicodeDecodeError) as e:
-            logger.exception("Document processing validation error")
+            logger.warning("Document processing validation error: {}", type(e).__name__)
             raise HTTPException(status_code=400, detail=self._safe_processing_detail(e))
         except Exception as e:
             logger.exception("Document processing error")
+            error_str = str(e).lower()
+            if "quota" in error_str or "429" in error_str or "resourceexhausted" in error_str:
+                raise HTTPException(
+                    status_code=429, 
+                    detail="API Quota Exhausted: Your daily Google Free Tier embedding limit (1,000 requests/day) has been reached. Please try again tomorrow or switch to a paid API key."
+                )
             raise HTTPException(status_code=500, detail="Processing failed")
 
-    async def list_documents(self) -> list[DocumentListItem]:
-        documents = await self.database.get_all_documents()
+    async def list_documents(self, session_id: str) -> list[DocumentListItem]:
+        documents = await self.database.get_all_documents(session_id)
         return [
             DocumentListItem(
                 document_id=doc["document_id"],
@@ -235,12 +283,14 @@ class DocumentService:
             for doc in documents
         ]
 
-    async def get_document_details(self, document_id: str) -> DocumentDetailResponse:
-        document = await self.database.get_document_by_id(document_id)
+    async def get_document_details(
+        self, document_id: str, session_id: str
+    ) -> DocumentDetailResponse:
+        document = await self.database.get_document_by_id(document_id, session_id)
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
 
-        chunks = await self.embeddings.get_chunks_by_document_id(document_id)
+        chunks = await self.embeddings.get_chunks_by_document_id(document_id, session_id)
         formatted_chunks = [
             {
                 "chunk_id": chunk["id"],
@@ -256,7 +306,6 @@ class DocumentService:
             filename=document["filename"],
             file_type=document["file_type"],
             upload_date=document["upload_date"],
-            extracted_text=document["extracted_text"],
             chunks=formatted_chunks,
             metadata={
                 "chunk_count": document["chunk_count"],
@@ -264,7 +313,14 @@ class DocumentService:
             },
         )
 
-    async def delete_document(self, document_id: str) -> dict[str, str]:
-        await self.embeddings.delete_by_document_id(document_id)
-        await self.database.delete_document(document_id)
+    async def delete_document(
+        self, document_id: str, session_id: str
+    ) -> dict[str, str]:
+        # Verify ownership first
+        document = await self.database.get_document_by_id(document_id, session_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        await self.embeddings.delete_by_document_id(document_id, session_id)
+        await self.database.delete_document(document_id, session_id)
         return {"status": "success", "document_id": document_id}

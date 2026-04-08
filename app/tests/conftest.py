@@ -13,6 +13,11 @@ from app.database import AppState, get_app_state
 from app.health import router as health_router
 from app.routes import router as api_router
 from app.schemas import ChunkInfo, QueryResponse
+from app.security import SessionContext, require_session
+
+
+# A fixed session ID used across all tests
+TEST_SESSION_ID = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 
 
 class SyncASGIClient:
@@ -73,7 +78,6 @@ def mock_app_state() -> Any:
             "filename": "sample.txt",
             "file_type": ".txt",
             "upload_date": "2026-04-07T00:00:00Z",
-            "extracted_text": "hello world",
             "chunks": [
                 {
                     "chunk_id": "doc-1_chunk_0",
@@ -120,32 +124,49 @@ def mock_app_state() -> Any:
     )
 
 
+def _build_app(
+    mock_state: Any | None = None,
+    session_override: SessionContext | None = None,
+) -> FastAPI:
+    """Helper to build a test FastAPI app with optional overrides."""
+    test_app = FastAPI()
+    test_app.include_router(api_router)
+    test_app.include_router(health_router)
+
+    if mock_state is not None:
+        test_app.dependency_overrides[get_app_state] = lambda: mock_state
+
+    # Always override session dependency in tests
+    ctx = session_override or SessionContext(session_id=TEST_SESSION_ID)
+    test_app.dependency_overrides[require_session] = lambda: ctx
+
+    return test_app
+
+
 @pytest.fixture
 def client(mock_app_state: Any) -> Generator[SyncASGIClient, None, None]:
-    app = FastAPI()
-    app.include_router(api_router)
-    app.include_router(health_router)
-
-    app.dependency_overrides[get_app_state] = lambda: mock_app_state
-
-    yield SyncASGIClient(app)
+    test_app = _build_app(mock_state=mock_app_state)
+    yield SyncASGIClient(test_app, headers={"X-Session-Id": TEST_SESSION_ID})
 
 
 @pytest.fixture
 def app_without_state() -> Generator[SyncASGIClient, None, None]:
     app = FastAPI()
     app.include_router(api_router)
+    app.dependency_overrides[require_session] = lambda: SessionContext(
+        session_id=TEST_SESSION_ID
+    )
 
-    yield SyncASGIClient(app)
+    yield SyncASGIClient(app, headers={"X-Session-Id": TEST_SESSION_ID})
 
 
 @pytest.fixture
 def protected_client(mock_app_state: Any, monkeypatch: pytest.MonkeyPatch) -> SyncASGIClient:
     monkeypatch.setattr(settings, "api_access_key", "test-secret")
 
-    app = FastAPI()
-    app.include_router(api_router)
-    app.include_router(health_router)
-    app.dependency_overrides[get_app_state] = lambda: mock_app_state
+    test_app = _build_app(mock_state=mock_app_state)
 
-    return SyncASGIClient(app, headers={"X-API-Key": "test-secret"})
+    return SyncASGIClient(test_app, headers={
+        "X-API-Key": "test-secret",
+        "X-Session-Id": TEST_SESSION_ID,
+    })

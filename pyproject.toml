@@ -27,7 +27,14 @@ dependencies = [
     "loguru==0.7.2",
     "slowapi==0.1.9",
     "faker==30.3.0",
+    "pymupdf>=1.27.2.2",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.0.3",
+]

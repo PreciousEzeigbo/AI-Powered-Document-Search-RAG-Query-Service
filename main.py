@@ -1,10 +1,14 @@
 """Application entrypoint: startup wiring and route registration."""
 
+import asyncio
 import logging
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
 from app.core.documents import DocumentService
@@ -12,7 +16,7 @@ from app.core.embeddings import EmbeddingsStore
 from app.core.rag import RAGPipeline
 from app.database import AppState, Database
 from app.health import router as health_router
-from app.routes import router as api_router
+from app.routes import limiter, router as api_router
 from loguru import logger
 
 # Chroma 0.4.x can emit noisy PostHog telemetry logger errors even when telemetry is disabled.
@@ -25,17 +29,37 @@ app = FastAPI(
     version=settings.api_version,
 )
 
+# ---------------------------------------------------------------------------
+# Rate limiting (V-13)
+# ---------------------------------------------------------------------------
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ---------------------------------------------------------------------------
+# CORS (V-14) — validated in config.py, applied here
+# ---------------------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-API-Key"],
+    allow_headers=["Content-Type", "Authorization", "X-API-Key", "X-Session-Id"],
 )
 
 
+# ---------------------------------------------------------------------------
+# Startup / shutdown
+# ---------------------------------------------------------------------------
+
 @app.on_event("startup")
 async def startup_event() -> None:
+    # ----- Security warnings (V-12) -----
+    if not (settings.api_access_key or "").strip():
+        logger.warning(
+            "⚠️  API_ACCESS_KEY is not set — all endpoints are accessible without "
+            "authentication.  Set API_ACCESS_KEY in your .env for production use."
+        )
+
     database = Database(db_path=settings.database_path)
     await database.initialize()
 
@@ -76,6 +100,33 @@ async def startup_event() -> None:
     )
 
     logger.info("All services initialized successfully")
+
+    # ----- Retention cleanup task (V-04) -----
+    if settings.session_ttl_hours > 0:
+        asyncio.create_task(_periodic_cleanup(database, embeddings))
+
+
+async def _periodic_cleanup(database: Database, embeddings: EmbeddingsStore) -> None:
+    """Background task that purges expired sessions periodically."""
+    while True:
+        try:
+            # Collect expired session IDs before purging DB rows
+            expired = await database.get_expired_session_ids(settings.session_ttl_hours)
+            for sid in expired:
+                await embeddings.delete_by_session_id(sid)
+
+            deleted = await database.purge_expired_sessions(settings.session_ttl_hours)
+            if deleted:
+                logger.info(
+                    "Retention cleanup: purged {} document(s) from {} expired session(s)",
+                    deleted,
+                    len(expired),
+                )
+        except Exception:
+            logger.exception("Error during retention cleanup")
+
+        # Run every hour
+        await asyncio.sleep(3600)
 
 
 @app.on_event("shutdown")

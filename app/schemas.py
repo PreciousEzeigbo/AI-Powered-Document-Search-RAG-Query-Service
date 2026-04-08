@@ -6,12 +6,12 @@ from app.config import settings
 
 class ConversationTurn(BaseModel):
     role: str = Field(..., pattern="^(user|assistant)$")
-    content: str = Field(..., min_length=1)
+    content: str = Field(..., min_length=1, max_length=2000)
 
 
 class QueryRequest(BaseModel):
     """Request model for RAG query endpoint."""
-    question: str = Field(..., description="User question to answer", min_length=1)
+    question: str = Field(..., description="User question to answer", min_length=1, max_length=2000)
     document_id: str | None = Field(
         default=None,
         description="Optional document scope for retrieval",
@@ -71,6 +71,5 @@ class DocumentDetailResponse(BaseModel):
     filename: str
     file_type: str
     upload_date: str
-    extracted_text: str
     chunks: List[Dict[str, Any]]
     metadata: Dict[str, Any]

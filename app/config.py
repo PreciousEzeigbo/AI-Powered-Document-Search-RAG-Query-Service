@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     chunk_size: int = 500
     chunk_overlap: int = 50
     max_file_size_mb: int = 50
+    max_chunks_per_document: int = 150
     
     api_title: str = "RAG Document Search Service"
     api_version: str = "1.0.0"
@@ -66,6 +67,13 @@ class Settings(BaseSettings):
     rag_max_tokens: int = 1000
     llm_max_tokens: int = 1024
 
+    # Session & Retention
+    session_ttl_hours: int = 24  # Auto-purge sessions after this many hours (0 = disabled)
+
+    # Rate Limiting
+    rate_limit_upload: str = "10/minute"
+    rate_limit_query: str = "30/minute"
+
     @model_validator(mode='before')
     @classmethod
     def map_legacy_rag_tokens(cls, values: Any) -> Any:
@@ -78,7 +86,8 @@ class Settings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     
     @model_validator(mode='after')
-    def validate_keys(self):
+    def validate_settings(self):
+        # Validate API keys
         if os.getenv('ENV') != 'dev':
             provider = (self.provider or '').strip().lower()
             if provider == 'google' or self.use_google:
@@ -87,6 +96,14 @@ class Settings(BaseSettings):
             elif provider == 'openrouter':
                 if not self.openrouter_api_key or 'your_api_key_here' in self.openrouter_api_key:
                     raise ValueError('OPENROUTER_API_KEY must be set when provider=openrouter')
+
+        # Validate CORS: reject allow_credentials=True with wildcard origins
+        if "*" in self.cors_origins and len(self.cors_origins) == 1:
+            raise ValueError(
+                "CORS misconfiguration: wildcard origins ('*') should not be used. "
+                "Specify explicit allowed origins."
+            )
+
         return self
 
     class Config:
