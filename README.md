@@ -159,31 +159,7 @@ GET /health
 - **Document Processing**: PyPDF2, python-docx
 - **Server**: Uvicorn
 
-## 📁 Project Structure
 
-```
-AI-RAG-Query-Service/
-├── app/                     # Packaged FastAPI backend
-│   ├── main.py              # FastAPI application & endpoints
-│   ├── config.py            # Package re-exports
-│   ├── database.py          # Package re-exports
-│   ├── document_processor.py
-│   ├── embeddings_service.py
-│   ├── rag_service.py
-│   └── vector_store.py
-├── main.py                  # Legacy direct launcher
-├── config.py                # Legacy module compatibility
-├── embeddings_service.py    # Legacy module compatibility
-├── vector_store.py          # Legacy module compatibility
-├── rag_service.py           # Legacy module compatibility
-├── database.py              # Legacy module compatibility
-├── document_processor.py    # Legacy module compatibility
-├── pyproject.toml           # Python dependencies and uv metadata
-├── requirements.txt         # Legacy dependency list for compatibility
-├── .env.sample              # Environment variables template
-├── .gitignore               # Git ignore rules
-└── README.md                # This file
-```
 
 ## 🔧 Configuration
 
