@@ -37,7 +37,6 @@ class EmbeddingsStore:
         if self.provider == "google":
             genai.configure(api_key=self._api_key)
 
-    # --- API key is accessed via property, never exposed via repr ---
 
     def __repr__(self) -> str:
         return (

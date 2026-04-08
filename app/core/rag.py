@@ -196,54 +196,31 @@ class RAGPipeline:
             f"QUESTION:\n{question}"
         )
 
-    async def _call_llm(
+    # ---- OpenRouter fallback free model (used when Google quota is exhausted) ----
+    _OPENROUTER_FALLBACK_MODEL = "meta-llama/llama-3.1-8b-instruct:free"
+
+    async def _call_openrouter(
         self,
-        question: str,
-        context: str,
-        history: List[ConversationTurn],
+        user_message: str,
+        model: str | None = None,
     ) -> str:
-        user_message = self._build_user_message(question, context, history)
+        """Call the OpenRouter API directly (used as primary or fallback provider)."""
+        if not self._api_key and self.provider != "openrouter":
+            raise Exception("No OpenRouter API key configured for fallback")
 
-        if self.provider == "google":
-            model_name = self.llm_model.replace("google/", "").replace("models/", "")
-            if not model_name.startswith("gemini"):
-                model_name = "gemini-2.5-flash"
-            try:
-                model = genai.GenerativeModel(
-                    model_name,
-                    system_instruction=self._SYSTEM_PROMPT,
-                )
-                response = model.generate_content(
-                    user_message,
-                    generation_config=genai.GenerationConfig(
-                        max_output_tokens=self.llm_max_tokens,
-                        temperature=0.3,
-                    ),
-                )
-                return response.text
-            except Exception as e:
-                if "not found" in str(e).lower() and model_name != "gemini-2.5-flash":
-                    model = genai.GenerativeModel(
-                        "gemini-2.5-flash",
-                        system_instruction=self._SYSTEM_PROMPT,
-                    )
-                    response = model.generate_content(
-                        user_message,
-                        generation_config=genai.GenerationConfig(
-                            max_output_tokens=self.llm_max_tokens,
-                            temperature=0.3,
-                        ),
-                    )
-                    return response.text
-                raise Exception(f"LLM generation failed: {str(e)}")
+        # When used as fallback, we need the openrouter key from env
+        import os
+        api_key = self._api_key if self.provider == "openrouter" else os.getenv("OPENROUTER_API_KEY", "")
+        if not api_key:
+            raise Exception("OPENROUTER_API_KEY not set — cannot use OpenRouter fallback")
 
-        # --- OpenRouter / OpenAI-compatible: structured roles (V-09) ---
+        chosen_model = model or (self.llm_model if self.provider == "openrouter" else self._OPENROUTER_FALLBACK_MODEL)
         headers = {
-            "Authorization": f"Bearer {self._api_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
         payload: Dict[str, Any] = {
-            "model": self.llm_model,
+            "model": chosen_model,
             "messages": [
                 {"role": "system", "content": self._SYSTEM_PROMPT},
                 {"role": "user", "content": user_message},
@@ -261,6 +238,78 @@ class RAGPipeline:
             ) as response:
                 if response.status != 200:
                     error_text = await response.text()
-                    raise Exception(f"LLM generation failed: API error {response.status} - {error_text}")
+                    raise Exception(f"OpenRouter error {response.status}: {error_text}")
                 data = await response.json()
                 return data["choices"][0]["message"]["content"].strip()
+
+    async def _call_llm(
+        self,
+        question: str,
+        context: str,
+        history: List[ConversationTurn],
+    ) -> str:
+        user_message = self._build_user_message(question, context, history)
+
+        # --- OpenRouter as primary provider ---
+        if self.provider == "openrouter":
+            return await self._call_openrouter(user_message)
+
+        # --- Google Gemini as primary provider, fall back to OpenRouter on quota exhaustion ---
+        model_name = self.llm_model.replace("google/", "").replace("models/", "")
+        if not model_name.startswith("gemini"):
+            model_name = "gemini-2.0-flash"
+
+        try:
+            model = genai.GenerativeModel(
+                model_name,
+                system_instruction=self._SYSTEM_PROMPT,
+            )
+            response = model.generate_content(
+                user_message,
+                generation_config=genai.GenerationConfig(
+                    max_output_tokens=self.llm_max_tokens,
+                    temperature=0.3,
+                ),
+            )
+            return response.text
+        except Exception as e:
+            err_str = str(e).lower()
+            is_quota = "resourceexhausted" in err_str or "429" in err_str or "quota" in err_str
+            is_not_found = "not found" in err_str
+
+            if is_not_found and model_name != "gemini-2.0-flash":
+                # Model not available — silently retry with stable fallback model
+                logger.warning("Gemini model {} not found, retrying with gemini-2.0-flash", model_name)
+                try:
+                    model = genai.GenerativeModel(
+                        "gemini-2.0-flash",
+                        system_instruction=self._SYSTEM_PROMPT,
+                    )
+                    response = model.generate_content(
+                        user_message,
+                        generation_config=genai.GenerationConfig(
+                            max_output_tokens=self.llm_max_tokens,
+                            temperature=0.3,
+                        ),
+                    )
+                    return response.text
+                except Exception:
+                    pass
+
+            if is_quota:
+                # Daily quota exhausted — automatically fall back to OpenRouter
+                import os
+                has_openrouter = bool(os.getenv("OPENROUTER_API_KEY"))
+                if has_openrouter:
+                    logger.warning(
+                        "Google Gemini quota exhausted. Falling back to OpenRouter ({})",
+                        self._OPENROUTER_FALLBACK_MODEL,
+                    )
+                    return await self._call_openrouter(user_message)
+                else:
+                    raise Exception(
+                        "API Quota Exhausted: Google Gemini daily limit reached and no OpenRouter fallback key is configured. "
+                        "Please set OPENROUTER_API_KEY in your environment variables."
+                    )
+
+            raise Exception(f"LLM generation failed: {str(e)}")
