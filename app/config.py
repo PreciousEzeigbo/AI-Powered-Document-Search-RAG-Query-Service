@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     
     # Model Configuration
     embedding_model: str = "google/text-embedding-004"
-    llm_model: str = "google/gemini-1.5-flash"
+    llm_model: str = "google/gemini-2.0-flash"
     provider: str = "openrouter"  # Options: "google", "openrouter", "openai", "anthropic"
     
     vector_store_type: str = "chromadb"  # Options: "chromadb" or "pinecone"
