@@ -197,7 +197,7 @@ class RAGPipeline:
         )
 
     # ---- OpenRouter fallback free model (used when Google quota is exhausted) ----
-    _OPENROUTER_FALLBACK_MODEL = "meta-llama/llama-3.1-8b-instruct:free"
+    _OPENROUTER_FALLBACK_MODEL = "openrouter/free"
 
     async def _call_openrouter(
         self,
